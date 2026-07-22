@@ -22,9 +22,10 @@ import type {
   Participant,
 } from "../../../../types";
 
-type ParticipantWithId = Participant & {
-  id: string;
-};
+type ParticipantWithId =
+  Participant & {
+    id: string;
+  };
 
 type SeasonState = {
   id: string;
@@ -45,26 +46,94 @@ type ParticipantRow = {
   attendance: unknown;
 };
 
+function getRecentSeasonsStorageKey(
+  eventId: string
+) {
+  return `attendance:event:${eventId}:recent-seasons`;
+}
+
+function readRecentSeasonIds(
+  eventId: string
+): string[] {
+  try {
+    const saved = localStorage.getItem(
+      getRecentSeasonsStorageKey(eventId)
+    );
+
+    if (!saved) {
+      return [];
+    }
+
+    const parsed: unknown =
+      JSON.parse(saved);
+
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed.filter(
+      (value): value is string =>
+        typeof value === "string"
+    );
+  } catch {
+    console.error(
+      "最近開いたシーズンの読み込みに失敗しました"
+    );
+
+    return [];
+  }
+}
+
+function rememberSeason(
+  eventId: string,
+  seasonId: string
+) {
+  const currentIds =
+    readRecentSeasonIds(eventId);
+
+  const updatedIds = [
+    seasonId,
+    ...currentIds.filter(
+      (currentId) =>
+        currentId !== seasonId
+    ),
+  ].slice(0, 30);
+
+  localStorage.setItem(
+    getRecentSeasonsStorageKey(eventId),
+    JSON.stringify(updatedIds)
+  );
+}
+
 export default function SeasonPage() {
-  const params = useParams<{
-    eventId: string;
-    seasonId: string;
-  }>();
+  const params =
+    useParams<{
+      eventId: string;
+      seasonId: string;
+    }>();
 
   const eventId = params.eventId;
   const seasonId = params.seasonId;
 
   const [season, setSeason] =
-    useState<SeasonState | null>(null);
+    useState<SeasonState | null>(
+      null
+    );
 
   const [newName, setNewName] =
     useState("");
 
-  const [editingIndex, setEditingIndex] =
-    useState<number | null>(null);
+  const [
+    editingIndex,
+    setEditingIndex,
+  ] = useState<number | null>(
+    null
+  );
 
-  const [isDateManagerOpen, setIsDateManagerOpen] =
-    useState(false);
+  const [
+    isDateManagerOpen,
+    setIsDateManagerOpen,
+  ] = useState(false);
 
   const [isLoaded, setIsLoaded] =
     useState(false);
@@ -72,141 +141,164 @@ export default function SeasonPage() {
   const [isSaving, setIsSaving] =
     useState(false);
 
-  const [errorMessage, setErrorMessage] =
-    useState("");
+  const [
+    errorMessage,
+    setErrorMessage,
+  ] = useState("");
 
-  const normalizeAnswers = useCallback(
-    (
-      attendance: unknown,
-      dateCount: number
-    ): Answer[] => {
-      const validAnswers: Answer[] = [
-        "O",
-        "X",
-        "前半希望",
-        "後半希望",
-        "未定",
-      ];
+  const normalizeAnswers =
+    useCallback(
+      (
+        attendance: unknown,
+        dateCount: number
+      ): Answer[] => {
+        const validAnswers: Answer[] =
+          [
+            "O",
+            "X",
+            "前半希望",
+            "後半希望",
+            "未定",
+          ];
 
-      const sourceAnswers =
-        Array.isArray(attendance)
-          ? attendance
+        const sourceAnswers =
+          Array.isArray(attendance)
+            ? attendance
+            : [];
+
+        return Array.from(
+          {
+            length: dateCount,
+          },
+          (_, index) => {
+            const answer =
+              sourceAnswers[index];
+
+            return validAnswers.includes(
+              answer as Answer
+            )
+              ? (answer as Answer)
+              : "未定";
+          }
+        );
+      },
+      []
+    );
+
+  const loadSeason =
+    useCallback(async () => {
+      setIsLoaded(false);
+      setErrorMessage("");
+
+      const [
+        seasonResult,
+        participantsResult,
+      ] = await Promise.all([
+        supabase
+          .from("seasons")
+          .select(
+            "id, title, dates"
+          )
+          .eq("id", seasonId)
+          .eq("event_id", eventId)
+          .maybeSingle(),
+
+        supabase
+          .from("participants")
+          .select(
+            "id, name, attendance"
+          )
+          .eq(
+            "season_id",
+            seasonId
+          )
+          .order("created_at", {
+            ascending: true,
+          }),
+      ]);
+
+      if (seasonResult.error) {
+        console.error(
+          "シーズンの取得に失敗しました",
+          seasonResult.error
+        );
+
+        setErrorMessage(
+          "シーズンの読み込みに失敗しました"
+        );
+
+        setIsLoaded(true);
+        return;
+      }
+
+      if (!seasonResult.data) {
+        setSeason(null);
+        setIsLoaded(true);
+        return;
+      }
+
+      if (
+        participantsResult.error
+      ) {
+        console.error(
+          "参加者の取得に失敗しました",
+          participantsResult.error
+        );
+
+        setErrorMessage(
+          "参加者の読み込みに失敗しました"
+        );
+
+        setIsLoaded(true);
+        return;
+      }
+
+      const seasonRow =
+        seasonResult.data as SeasonRow;
+
+      const dates =
+        Array.isArray(
+          seasonRow.dates
+        )
+          ? (seasonRow.dates as string[])
           : [];
 
-      return Array.from(
-        { length: dateCount },
-        (_, index) => {
-          const answer =
-            sourceAnswers[index];
+      const participantRows =
+        (participantsResult.data ??
+          []) as ParticipantRow[];
 
-          return validAnswers.includes(
-            answer as Answer
-          )
-            ? (answer as Answer)
-            : "未定";
-        }
+      const participants:
+        ParticipantWithId[] =
+        participantRows.map(
+          (participant) => ({
+            id: participant.id,
+            name: participant.name,
+            answers:
+              normalizeAnswers(
+                participant.attendance,
+                dates.length
+              ),
+          })
+        );
+
+      setSeason({
+        id: seasonRow.id,
+        title: seasonRow.title,
+        dates,
+        participants,
+      });
+
+      rememberSeason(
+        eventId,
+        seasonId
       );
-    },
-    []
-  );
 
-  const loadSeason = useCallback(async () => {
-    setIsLoaded(false);
-    setErrorMessage("");
-
-    const [
-      seasonResult,
-      participantsResult,
-    ] = await Promise.all([
-      supabase
-        .from("seasons")
-        .select("id, title, dates")
-        .eq("id", seasonId)
-        .eq("event_id", eventId)
-        .maybeSingle(),
-
-      supabase
-        .from("participants")
-        .select(
-          "id, name, attendance"
-        )
-        .eq("season_id", seasonId)
-        .order("created_at", {
-          ascending: true,
-        }),
+      setIsLoaded(true);
+    }, [
+      eventId,
+      normalizeAnswers,
+      seasonId,
     ]);
-
-    if (seasonResult.error) {
-      console.error(
-        "シーズンの取得に失敗しました",
-        seasonResult.error
-      );
-
-      setErrorMessage(
-        "シーズンの読み込みに失敗しました"
-      );
-      setIsLoaded(true);
-      return;
-    }
-
-    if (!seasonResult.data) {
-      setSeason(null);
-      setIsLoaded(true);
-      return;
-    }
-
-    if (participantsResult.error) {
-      console.error(
-        "参加者の取得に失敗しました",
-        participantsResult.error
-      );
-
-      setErrorMessage(
-        "参加者の読み込みに失敗しました"
-      );
-      setIsLoaded(true);
-      return;
-    }
-
-    const seasonRow =
-      seasonResult.data as SeasonRow;
-
-    const dates = Array.isArray(
-      seasonRow.dates
-    )
-      ? (seasonRow.dates as string[])
-      : [];
-
-    const participantRows =
-      (participantsResult.data ??
-        []) as ParticipantRow[];
-
-    const participants:
-      ParticipantWithId[] =
-      participantRows.map(
-        (participant) => ({
-          id: participant.id,
-          name: participant.name,
-          answers: normalizeAnswers(
-            participant.attendance,
-            dates.length
-          ),
-        })
-      );
-
-    setSeason({
-      id: seasonRow.id,
-      title: seasonRow.title,
-      dates,
-      participants,
-    });
-
-    setIsLoaded(true);
-  }, [
-    eventId,
-    normalizeAnswers,
-    seasonId,
-  ]);
 
   useEffect(() => {
     void loadSeason();
@@ -253,6 +345,7 @@ export default function SeasonPage() {
       setErrorMessage(
         "参加者を追加できませんでした"
       );
+
       setIsSaving(false);
       return;
     }
@@ -267,10 +360,11 @@ export default function SeasonPage() {
         {
           id: participant.id,
           name: participant.name,
-          answers: normalizeAnswers(
-            participant.attendance,
-            season.dates.length
-          ),
+          answers:
+            normalizeAnswers(
+              participant.attendance,
+              season.dates.length
+            ),
         },
       ],
     });
@@ -305,14 +399,15 @@ export default function SeasonPage() {
         })
       );
 
-    const { error: seasonError } =
-      await supabase
-        .from("seasons")
-        .update({
-          dates: updatedDates,
-        })
-        .eq("id", season.id)
-        .eq("event_id", eventId);
+    const {
+      error: seasonError,
+    } = await supabase
+      .from("seasons")
+      .update({
+        dates: updatedDates,
+      })
+      .eq("id", season.id)
+      .eq("event_id", eventId);
 
     if (seasonError) {
       console.error(
@@ -323,6 +418,7 @@ export default function SeasonPage() {
       setErrorMessage(
         "日付を追加できませんでした"
       );
+
       setIsSaving(false);
       return;
     }
@@ -350,7 +446,8 @@ export default function SeasonPage() {
 
     const participantError =
       updateResults.find(
-        (result) => result.error
+        (result) =>
+          result.error
       )?.error;
 
     if (participantError) {
@@ -391,7 +488,8 @@ export default function SeasonPage() {
     const updatedDates =
       season.dates.filter(
         (_, currentIndex) =>
-          currentIndex !== dateIndex
+          currentIndex !==
+          dateIndex
       );
 
     const updatedParticipants =
@@ -401,19 +499,21 @@ export default function SeasonPage() {
           answers:
             participant.answers.filter(
               (_, currentIndex) =>
-                currentIndex !== dateIndex
+                currentIndex !==
+                dateIndex
             ),
         })
       );
 
-    const { error: seasonError } =
-      await supabase
-        .from("seasons")
-        .update({
-          dates: updatedDates,
-        })
-        .eq("id", season.id)
-        .eq("event_id", eventId);
+    const {
+      error: seasonError,
+    } = await supabase
+      .from("seasons")
+      .update({
+        dates: updatedDates,
+      })
+      .eq("id", season.id)
+      .eq("event_id", eventId);
 
     if (seasonError) {
       console.error(
@@ -424,6 +524,7 @@ export default function SeasonPage() {
       setErrorMessage(
         "日付を削除できませんでした"
       );
+
       setIsSaving(false);
       return;
     }
@@ -451,7 +552,8 @@ export default function SeasonPage() {
 
     const participantError =
       updateResults.find(
-        (result) => result.error
+        (result) =>
+          result.error
       )?.error;
 
     if (participantError) {
@@ -526,6 +628,7 @@ export default function SeasonPage() {
       setErrorMessage(
         "回答を保存できませんでした"
       );
+
       return;
     }
 
@@ -591,7 +694,10 @@ export default function SeasonPage() {
           title,
         })
         .eq("id", season.id)
-        .eq("event_id", eventId);
+        .eq(
+          "event_id",
+          eventId
+        );
 
     if (error) {
       console.error(
@@ -614,9 +720,12 @@ export default function SeasonPage() {
   }
 
   function handleTitleKeyDown(
-    event: KeyboardEvent<HTMLInputElement>
+    event:
+      KeyboardEvent<HTMLInputElement>
   ) {
-    if (event.key === "Enter") {
+    if (
+      event.key === "Enter"
+    ) {
       event.currentTarget.blur();
     }
   }
@@ -693,7 +802,9 @@ export default function SeasonPage() {
             <button
               type="button"
               onClick={() =>
-                setIsDateManagerOpen(true)
+                setIsDateManagerOpen(
+                  true
+                )
               }
               className="rounded-lg bg-gray-700 px-4 py-2 font-bold text-white hover:bg-gray-800"
             >
@@ -720,7 +831,9 @@ export default function SeasonPage() {
 
         <AddParticipantForm
           newName={newName}
-          onNameChange={setNewName}
+          onNameChange={
+            setNewName
+          }
           onAdd={() => {
             void addParticipant();
           }}
@@ -747,7 +860,9 @@ export default function SeasonPage() {
             );
           }}
           onClose={() =>
-            setIsDateManagerOpen(false)
+            setIsDateManagerOpen(
+              false
+            )
           }
         />
       )}
@@ -779,7 +894,9 @@ export default function SeasonPage() {
               );
             }}
             onClose={() =>
-              setEditingIndex(null)
+              setEditingIndex(
+                null
+              )
             }
           />
         )}
