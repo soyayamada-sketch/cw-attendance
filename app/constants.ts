@@ -19,13 +19,16 @@ export const initialParticipants: Participant[] = [
   {
     name: "BOCCHI_THE_WOWS",
     answers: ["O", "O", "O", "O"],
+    comment: "",
   },
   {
     name: "山田",
     answers: ["前半希望", "O", "X", "未定"],
+    comment: "",
   },
   {
     name: "佐藤",
     answers: ["後半希望", "X", "O", "前半希望"],
+    comment: "",
   },
 ];
