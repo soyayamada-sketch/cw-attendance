@@ -8,6 +8,7 @@ export type Answer =
 export type Participant = {
   name: string;
   answers: Answer[];
+  comment: string;
 };
 
 export type Season = {

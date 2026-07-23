@@ -44,6 +44,7 @@ type ParticipantRow = {
   id: string;
   name: string;
   attendance: unknown;
+  comment: string | null;
 };
 
 function getRecentSeasonsStorageKey(
@@ -206,8 +207,8 @@ export default function SeasonPage() {
         supabase
           .from("participants")
           .select(
-            "id, name, attendance"
-          )
+  "id, name, attendance, comment"
+)
           .eq(
             "season_id",
             seasonId
@@ -273,6 +274,7 @@ export default function SeasonPage() {
           (participant) => ({
             id: participant.id,
             name: participant.name,
+            comment: participant.comment ?? "",
             answers:
               normalizeAnswers(
                 participant.attendance,
@@ -332,8 +334,8 @@ export default function SeasonPage() {
           attendance: answers,
         })
         .select(
-          "id, name, attendance"
-        )
+  "id, name, attendance, comment"
+)
         .single();
 
     if (error) {
@@ -358,14 +360,15 @@ export default function SeasonPage() {
       participants: [
         ...season.participants,
         {
-          id: participant.id,
-          name: participant.name,
-          answers:
-            normalizeAnswers(
-              participant.attendance,
-              season.dates.length
-            ),
-        },
+  id: participant.id,
+  name: participant.name,
+  comment: participant.comment ?? "",
+  answers:
+    normalizeAnswers(
+      participant.attendance,
+      season.dates.length
+    ),
+},
       ],
     });
 
@@ -856,6 +859,72 @@ export default function SeasonPage() {
     });
   }
 
+  async function saveComment(
+  participantIndex: number,
+  comment: string
+): Promise<boolean> {
+  if (!season) {
+    return false;
+  }
+
+  const participant =
+    season.participants[
+      participantIndex
+    ];
+
+  if (!participant) {
+    return false;
+  }
+
+  const { error } =
+    await supabase
+      .from("participants")
+      .update({
+        comment,
+      })
+      .eq("id", participant.id)
+      .eq(
+        "season_id",
+        season.id
+      );
+
+  if (error) {
+    console.error(
+      "コメントの保存に失敗しました",
+      error
+    );
+
+    setErrorMessage(
+      "コメントを保存できませんでした"
+    );
+
+    return false;
+  }
+
+  const updatedParticipants =
+    season.participants.map(
+      (
+        currentParticipant,
+        currentIndex
+      ) =>
+        currentIndex ===
+        participantIndex
+          ? {
+              ...currentParticipant,
+              comment,
+            }
+          : currentParticipant
+    );
+
+  setSeason({
+    ...season,
+    participants:
+      updatedParticipants,
+  });
+
+  return true;
+}
+
   function changeTitle(
     title: string
   ) {
@@ -1103,6 +1172,9 @@ export default function SeasonPage() {
                 answer
               );
             }}
+            onSaveComment={
+  saveComment
+}
             onClose={() =>
               setEditingIndex(
                 null

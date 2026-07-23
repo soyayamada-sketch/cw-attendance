@@ -1,12 +1,19 @@
-import type { Answer, Participant } from "../types";
+import type {
+  Answer,
+  Participant,
+} from "../types";
 
 type AttendanceTableProps = {
   dates: string[];
   participants: Participant[];
-  onEditParticipant: (participantIndex: number) => void;
+  onEditParticipant: (
+    participantIndex: number
+  ) => void;
 };
 
-function getChoiceClass(choice: Answer) {
+function getChoiceClass(
+  choice: Answer
+) {
   if (choice === "O") {
     return "bg-green-200";
   }
@@ -15,14 +22,19 @@ function getChoiceClass(choice: Answer) {
     return "bg-red-200";
   }
 
-  if (choice === "前半希望" || choice === "後半希望") {
+  if (
+    choice === "前半希望" ||
+    choice === "後半希望"
+  ) {
     return "bg-yellow-200";
   }
 
   return "bg-gray-300";
 }
 
-function getResultClass(count: number) {
+function getResultClass(
+  count: number
+) {
   if (count <= 4) {
     return "bg-red-100";
   }
@@ -43,8 +55,13 @@ export default function AttendanceTable({
     dateIndex: number,
     targets: Answer[]
   ) {
-    return participants.filter((participant) =>
-      targets.includes(participant.answers[dateIndex])
+    return participants.filter(
+      (participant) =>
+        targets.includes(
+          participant.answers[
+            dateIndex
+          ]
+        )
     ).length;
   }
 
@@ -54,12 +71,16 @@ export default function AttendanceTable({
         <colgroup>
           <col className="w-44" />
 
-          {dates.map((date, dateIndex) => (
-            <col
-              key={`${date}-${dateIndex}`}
-              className="w-20"
-            />
-          ))}
+          {dates.map(
+            (date, dateIndex) => (
+              <col
+                key={`${date}-${dateIndex}`}
+                className="w-20"
+              />
+            )
+          )}
+
+          <col className="w-64" />
         </colgroup>
 
         <thead>
@@ -68,14 +89,20 @@ export default function AttendanceTable({
               参加者
             </th>
 
-            {dates.map((date, dateIndex) => (
-              <th
-                key={`${date}-${dateIndex}`}
-                className="border bg-gray-200 p-2 text-center"
-              >
-                {date}
-              </th>
-            ))}
+            {dates.map(
+              (date, dateIndex) => (
+                <th
+                  key={`${date}-${dateIndex}`}
+                  className="border bg-gray-200 p-2 text-center"
+                >
+                  {date}
+                </th>
+              )
+            )}
+
+            <th className="border bg-gray-200 p-2 text-left">
+              コメント
+            </th>
           </tr>
 
           <tr>
@@ -83,23 +110,31 @@ export default function AttendanceTable({
               前半 (21:00~22:30)
             </th>
 
-            {dates.map((date, dateIndex) => {
-              const count = countAnswers(dateIndex, [
-                "O",
-                "前半希望",
-              ]);
+            {dates.map(
+              (date, dateIndex) => {
+                const count =
+                  countAnswers(
+                    dateIndex,
+                    [
+                      "O",
+                      "前半希望",
+                    ]
+                  );
 
-              return (
-                <th
-                  key={`${date}-first-${dateIndex}`}
-                  className={`border p-2 text-center ${getResultClass(
-                    count
-                  )}`}
-                >
-                  {count}
-                </th>
-              );
-            })}
+                return (
+                  <th
+                    key={`${date}-first-${dateIndex}`}
+                    className={`border p-2 text-center ${getResultClass(
+                      count
+                    )}`}
+                  >
+                    {count}
+                  </th>
+                );
+              }
+            )}
+
+            <th className="border bg-white p-2" />
           </tr>
 
           <tr>
@@ -107,29 +142,40 @@ export default function AttendanceTable({
               後半 (22:30~24:30)
             </th>
 
-            {dates.map((date, dateIndex) => {
-              const count = countAnswers(dateIndex, [
-                "O",
-                "後半希望",
-              ]);
+            {dates.map(
+              (date, dateIndex) => {
+                const count =
+                  countAnswers(
+                    dateIndex,
+                    [
+                      "O",
+                      "後半希望",
+                    ]
+                  );
 
-              return (
-                <th
-                  key={`${date}-second-${dateIndex}`}
-                  className={`border border-b-4 p-2 text-center ${getResultClass(
-                    count
-                  )}`}
-                >
-                  {count}
-                </th>
-              );
-            })}
+                return (
+                  <th
+                    key={`${date}-second-${dateIndex}`}
+                    className={`border border-b-4 p-2 text-center ${getResultClass(
+                      count
+                    )}`}
+                  >
+                    {count}
+                  </th>
+                );
+              }
+            )}
+
+            <th className="border border-b-4 bg-white p-2" />
           </tr>
         </thead>
 
         <tbody>
           {participants.map(
-            (participant, participantIndex) => (
+            (
+              participant,
+              participantIndex
+            ) => (
               <tr
                 key={`${participant.name}-${participantIndex}`}
               >
@@ -137,7 +183,9 @@ export default function AttendanceTable({
                   <button
                     type="button"
                     onClick={() =>
-                      onEditParticipant(participantIndex)
+                      onEditParticipant(
+                        participantIndex
+                      )
                     }
                     className="block max-w-full truncate font-medium text-blue-600 underline"
                   >
@@ -146,7 +194,10 @@ export default function AttendanceTable({
                 </td>
 
                 {participant.answers.map(
-                  (answer, dateIndex) => (
+                  (
+                    answer,
+                    dateIndex
+                  ) => (
                     <td
                       key={dateIndex}
                       className={`whitespace-nowrap border p-2 text-center text-sm ${getChoiceClass(
@@ -157,6 +208,18 @@ export default function AttendanceTable({
                     </td>
                   )
                 )}
+
+                <td className="border bg-white p-2 text-sm">
+                  <div className="max-w-64 whitespace-pre-wrap break-words">
+                    {participant.comment ? (
+                      participant.comment
+                    ) : (
+                      <span className="text-gray-400">
+                        コメントなし
+                      </span>
+                    )}
+                  </div>
+                </td>
               </tr>
             )
           )}

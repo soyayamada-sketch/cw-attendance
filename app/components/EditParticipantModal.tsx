@@ -1,3 +1,10 @@
+"use client";
+
+import {
+  useEffect,
+  useState,
+} from "react";
+
 import type {
   Answer,
   Participant,
@@ -13,6 +20,10 @@ type EditParticipantModalProps = {
     dateIndex: number,
     answer: Answer
   ) => void;
+  onSaveComment: (
+    participantIndex: number,
+    comment: string
+  ) => Promise<boolean>;
   onClose: () => void;
 };
 
@@ -48,8 +59,49 @@ export default function EditParticipantModal({
   dates,
   choices,
   onChangeAnswer,
+  onSaveComment,
   onClose,
 }: EditParticipantModalProps) {
+  const [comment, setComment] =
+    useState(participant.comment);
+
+  const [isSavingComment, setIsSavingComment] =
+    useState(false);
+
+  const [commentMessage, setCommentMessage] =
+    useState("");
+
+  useEffect(() => {
+    setComment(participant.comment);
+    setCommentMessage("");
+  }, [participant.comment]);
+
+  async function handleSaveComment() {
+    if (isSavingComment) {
+      return;
+    }
+
+    setIsSavingComment(true);
+    setCommentMessage("");
+
+    const success = await onSaveComment(
+      participantIndex,
+      comment
+    );
+
+    if (success) {
+      setCommentMessage(
+        "コメントを保存しました"
+      );
+    } else {
+      setCommentMessage(
+        "コメントを保存できませんでした"
+      );
+    }
+
+    setIsSavingComment(false);
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-lg bg-white p-6 shadow-xl">
@@ -58,47 +110,95 @@ export default function EditParticipantModal({
         </h2>
 
         <div className="space-y-5">
-          {dates.map((date, dateIndex) => (
-            <div key={date}>
-              <div className="mb-2 font-medium">
-                {date}
-              </div>
+          {dates.map(
+            (date, dateIndex) => (
+              <div
+                key={`${date}-${dateIndex}`}
+              >
+                <div className="mb-2 font-medium">
+                  {date}
+                </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                {choices.map((choice) => {
-                  const selected =
-                    participant.answers[dateIndex] ===
-                    choice;
+                <div className="grid grid-cols-2 gap-2">
+                  {choices.map(
+                    (choice) => {
+                      const selected =
+                        participant.answers[
+                          dateIndex
+                        ] === choice;
 
-                  return (
-                    <button
-                      key={choice}
-                      type="button"
-                      onClick={() =>
-                        onChangeAnswer(
-                          participantIndex,
-                          dateIndex,
-                          choice
-                        )
-                      }
-                      className={`rounded border px-3 py-2 ${getChoiceClass(
-                        choice,
-                        selected
-                      )}`}
-                    >
-                      {choice}
-                    </button>
-                  );
-                })}
+                      return (
+                        <button
+                          key={choice}
+                          type="button"
+                          onClick={() =>
+                            onChangeAnswer(
+                              participantIndex,
+                              dateIndex,
+                              choice
+                            )
+                          }
+                          className={`rounded border px-3 py-2 ${getChoiceClass(
+                            choice,
+                            selected
+                          )}`}
+                        >
+                          {choice}
+                        </button>
+                      );
+                    }
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          )}
+        </div>
+
+        <div className="mt-6 border-t pt-5">
+          <label
+            htmlFor="participant-comment"
+            className="mb-2 block font-medium"
+          >
+            コメント
+          </label>
+
+          <textarea
+            id="participant-comment"
+            value={comment}
+            onChange={(event) =>
+              setComment(
+                event.target.value
+              )
+            }
+            rows={4}
+            placeholder="コメントを入力"
+            className="w-full resize-y rounded border border-gray-300 p-3 outline-none focus:border-blue-500"
+          />
+
+          <button
+            type="button"
+            onClick={() => {
+              void handleSaveComment();
+            }}
+            disabled={isSavingComment}
+            className="mt-3 w-full rounded bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+          >
+            {isSavingComment
+              ? "保存中..."
+              : "コメントを保存"}
+          </button>
+
+          {commentMessage && (
+            <p className="mt-2 text-center text-sm text-gray-600">
+              {commentMessage}
+            </p>
+          )}
         </div>
 
         <button
           type="button"
           onClick={onClose}
-          className="mt-6 w-full rounded bg-gray-700 px-4 py-2 text-white hover:bg-gray-800"
+          className="mt-4 w-full rounded bg-gray-700 px-4 py-2 text-white hover:bg-gray-800"
         >
           完了
         </button>

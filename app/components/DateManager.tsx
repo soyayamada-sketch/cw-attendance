@@ -29,6 +29,10 @@ import {
   CSS,
 } from "@dnd-kit/utilities";
 
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
+import { ja } from "date-fns/locale";
+
 type DateManagerProps = {
   dates: string[];
   onAddDates: (
@@ -236,10 +240,8 @@ export default function DateManager({
     setManualInput,
   ] = useState("");
 
-  const [
-    calendarInput,
-    setCalendarInput,
-  ] = useState("");
+  const [calendarInput, setCalendarInput] =
+  useState<Date | null>(null);
 
   const [
     selectedDates,
@@ -344,27 +346,24 @@ export default function DateManager({
     setInputError("");
   }
 
-  function handleCalendarSelect(
-    value: string
-  ) {
-    setCalendarInput(value);
+function handleCalendarSelect(
+  date: Date | null
+) {
+  setCalendarInput(date);
 
-    const monthDay =
-      calendarDateToMonthDay(
-        value
-      );
-
-    if (!monthDay) {
-      return;
-    }
-
-    addToSelection([
-      monthDay,
-    ]);
-
-    setCalendarInput("");
-    setInputError("");
+  if (!date) {
+    return;
   }
+
+  const monthDay = `${
+    date.getMonth() + 1
+  }/${date.getDate()}`;
+
+  addToSelection([monthDay]);
+
+  setInputError("");
+  setCalendarInput(null);
+}
 
   function handleAddSelectedDates() {
     if (
@@ -518,22 +517,14 @@ export default function DateManager({
                 カレンダーから選択
               </label>
 
-              <input
-                type="date"
-                value={
-                  calendarInput
-                }
-                onChange={(
-                  event
-                ) =>
-                  handleCalendarSelect(
-                    event
-                      .target
-                      .value
-                  )
-                }
-                className="mt-1 w-full rounded-lg border bg-white px-3 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-              />
+<DatePicker
+  selected={calendarInput}
+  onChange={handleCalendarSelect}
+  locale={ja}
+  dateFormat="M/d"
+  shouldCloseOnSelect={false}
+  className="mt-1 w-full rounded-lg border bg-white px-3 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+/>
 
               <p className="mt-1 text-xs text-gray-500">
                 日付を選ぶたびに候補へ追加されます
