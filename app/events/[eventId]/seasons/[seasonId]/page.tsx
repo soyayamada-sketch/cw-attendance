@@ -373,19 +373,44 @@ export default function SeasonPage() {
     setIsSaving(false);
   }
 
-  async function addDate(
-    date: string
+  async function addDates(
+    datesToAdd: string[]
   ) {
-    if (!season || isSaving) {
+    if (
+      !season ||
+      isSaving ||
+      datesToAdd.length === 0
+    ) {
       return;
     }
 
     setIsSaving(true);
     setErrorMessage("");
 
+    const normalizedDates =
+      datesToAdd
+        .map((date) => date.trim())
+        .filter(Boolean);
+
+    const uniqueDates =
+      normalizedDates.filter(
+        (date, index, array) =>
+          array.indexOf(date) ===
+            index &&
+          !season.dates.includes(date)
+      );
+
+    if (uniqueDates.length === 0) {
+      setErrorMessage(
+        "追加できる新しい日付がありません"
+      );
+      setIsSaving(false);
+      return;
+    }
+
     const updatedDates = [
       ...season.dates,
-      date,
+      ...uniqueDates,
     ];
 
     const updatedParticipants =
@@ -394,7 +419,9 @@ export default function SeasonPage() {
           ...participant,
           answers: [
             ...participant.answers,
-            "未定" as Answer,
+            ...uniqueDates.map(
+              () => "未定" as Answer
+            ),
           ],
         })
       );
@@ -579,6 +606,180 @@ export default function SeasonPage() {
     });
 
     setIsSaving(false);
+  }
+
+  async function moveDate(
+    fromIndex: number,
+    toIndex: number
+  ): Promise<boolean> {
+    if (!season || isSaving) {
+      return false;
+    }
+
+    if (
+      fromIndex < 0 ||
+      fromIndex >=
+        season.dates.length ||
+      toIndex < 0 ||
+      toIndex >=
+        season.dates.length ||
+      fromIndex === toIndex
+    ) {
+      return false;
+    }
+
+    setIsSaving(true);
+    setErrorMessage("");
+
+    function moveItem<T>(
+      items: T[]
+    ) {
+      const updatedItems = [
+        ...items,
+      ];
+
+      const [movedItem] =
+        updatedItems.splice(
+          fromIndex,
+          1
+        );
+
+      updatedItems.splice(
+        toIndex,
+        0,
+        movedItem
+      );
+
+      return updatedItems;
+    }
+
+    const previousDates = [
+      ...season.dates,
+    ];
+
+    const previousParticipants =
+      season.participants.map(
+        (participant) => ({
+          ...participant,
+          answers: [
+            ...participant.answers,
+          ],
+        })
+      );
+
+    const updatedDates =
+      moveItem(season.dates);
+
+    const updatedParticipants =
+      season.participants.map(
+        (participant) => ({
+          ...participant,
+          answers: moveItem(
+            participant.answers
+          ),
+        })
+      );
+
+    try {
+      const {
+        error: seasonError,
+      } = await supabase
+        .from("seasons")
+        .update({
+          dates: updatedDates,
+        })
+        .eq("id", season.id)
+        .eq("event_id", eventId);
+
+      if (seasonError) {
+        throw seasonError;
+      }
+
+      const updateResults =
+        await Promise.all(
+          updatedParticipants.map(
+            (participant) =>
+              supabase
+                .from("participants")
+                .update({
+                  attendance:
+                    participant.answers,
+                })
+                .eq(
+                  "id",
+                  participant.id
+                )
+                .eq(
+                  "season_id",
+                  season.id
+                )
+          )
+        );
+
+      const participantError =
+        updateResults.find(
+          (result) =>
+            result.error
+        )?.error;
+
+      if (participantError) {
+        await supabase
+          .from("seasons")
+          .update({
+            dates: previousDates,
+          })
+          .eq("id", season.id)
+          .eq(
+            "event_id",
+            eventId
+          );
+
+        await Promise.all(
+          previousParticipants.map(
+            (participant) =>
+              supabase
+                .from("participants")
+                .update({
+                  attendance:
+                    participant.answers,
+                })
+                .eq(
+                  "id",
+                  participant.id
+                )
+                .eq(
+                  "season_id",
+                  season.id
+                )
+          )
+        );
+
+        throw participantError;
+      }
+
+      setSeason({
+        ...season,
+        dates: updatedDates,
+        participants:
+          updatedParticipants,
+      });
+
+      return true;
+    } catch (error) {
+      console.error(
+        "日付の並び替えに失敗しました",
+        error
+      );
+
+      setErrorMessage(
+        "日付を並び替えられませんでした"
+      );
+
+      await loadSeason();
+      return false;
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   async function changeAnswer(
@@ -849,8 +1050,8 @@ export default function SeasonPage() {
       {isDateManagerOpen && (
         <DateManager
           dates={season.dates}
-          onAddDate={(date) => {
-            void addDate(date);
+          onAddDates={(dates) => {
+            void addDates(dates);
           }}
           onDeleteDate={(
             dateIndex
@@ -859,6 +1060,15 @@ export default function SeasonPage() {
               dateIndex
             );
           }}
+          onMoveDate={(
+            fromIndex,
+            toIndex
+          ) =>
+            moveDate(
+              fromIndex,
+              toIndex
+            )
+          }
           onClose={() =>
             setIsDateManagerOpen(
               false
